@@ -1,0 +1,469 @@
+---
+title: "Progress_report"
+output: html_document
+date: '2022-07-06'
+---
+
+# Group Members: 
+
+Jerald Achaibar; 903358668. 
+
+Abigail Grace Meil; 903125867. 
+
+Jonathan Bechtel; 903743566. 
+
+Shireen Misri; 903662039. 
+
+
+```{r setup, include=FALSE}
+rm(list = ls())
+path = "/Users/jerald/Documents/GaTechOMSA/MGT_6203/GroupProject/code/data/"
+solar_cycle = read.csv(paste0(path, 'solar_cycle_1.csv'))
+wheat_price = read.csv(paste0(path, 'WheatPrices_annual.csv'))
+corn_price = read.csv(paste0(path, 'CornPrices_annual.csv'))
+solar_cycle0 = read.csv(paste0(path, 'solar_cycle.csv'))
+wheat_weather = read.csv(paste0(path, 'Wheat_weather_daily.csv')) 
+corn_weather = read.csv(paste0(path, 'Corn_weather_daily.csv'))
+cycle_lists = read.csv(paste0(path, 'Solar_cycle_list.csv'))
+flux_data =read.csv(paste0(path, 'Flux_data_extended.csv'))
+```
+
+```{r, message = FALSE}
+library(dplyr)
+library(car)
+library(corrplot)
+library(lubridate)
+library(htmlTable)
+library(magrittr)
+library(ggplot2)
+```
+
+
+# Project Title:  
+
+The impact of climate, and solar activity on the price of grains; particularly the wheat and corn crops grown in the United States.
+
+# Background:
+
+Our sun has a cyclical nature much like the cold and hot seasons we observe on earth. However solar cycles are measured in the amount of sunspots that appear on the surface of the sun and [span](https://www.nasa.gov/mission_pages/sunearth/solar-events-news/Does-the-Solar-Cycle-Affect-Earths-Climate.html) over 22 years for a full cycle. Half cycles last about 11 years where it is typical to find a solar maximum. Solar maximum are a period of increased solar activity in the form of the total number of sunspots on the surface of the sun. Sunspots usually occur in pairs and are earth like in size. These massive regions produce abnormal magnetic fields relative to its surroundings. The interference of the magnetic field produced by each spot result in massive explosions that release hot plasma into space. When directed at earth, the magnetic storms are known to widen the visible range of the northern and southern lights, cause radio frequency interference, Satellite/GPS failure, and disruption to power grids.
+
+However, the scientific community is not so sure how much solar activity can or does affect Earth's climate. Previous [research](https://www.weather.gov/fsd/sunspots#:~:text=If%20sunspots%20are%20active%2C%20more,radio%20transmissions%20and%20power%20grids.) shows evidence that the earth's climate is sensitive to minimal changes in the energy output of the sun over time. The ultraviolet radiation is dramatically increased during high sunspot activity times and that is known to have a large effect on the earth's atmosphere.
+
+# Top level idea:
+
+We will attempt to explore whether solar activity and climate could affect the price of wheat and corn produced in the Mid west United states.
+
+Our initial hypothesis is that these periods of increased solar activity could have a significant impact on crops such as wheat and corn that are produced in the US.
+
+Initially our research question has become more granular, as our original hypothesis was to look at an overall index of commodities. We found this to be a complex question to attempt to answer as there are many moving parts in a commodity index. Instead, we decided to examine the effects of solar and climate on agricultural crops grown in the United States, mainly Wheat and Corn. 
+
+
+# Data exploration:
+
+To begin, we gathered [solar activity data](https://www.swpc.noaa.gov/products/solar-cycle-progression)
+
+```{r, echo = FALSE}
+# annual Sun spot numbers 
+solar_cycle = solar_cycle %>% 
+  mutate(date = ymd(Date)) %>% 
+  mutate_at(vars(date), funs(year, month, day))
+
+solar_annualized = solar_cycle %>% 
+  group_by(year) %>% 
+  summarise(ssn_total = sum(ssn), avg_rf = mean(f10.7)) %>%
+  select(year, ssn_total, avg_rf) %>% 
+  data.frame()
+
+
+plot(solar_annualized$year, solar_annualized$ssn_total ,pch = 19, 
+     ylab = 'Annual total sunspots', 
+     xlab = 'Year')
+  
+abline(v = cycle_lists$startYear, col = 'grey')
+abline(v = cycle_lists$maxYear, col = 'red')
+
+
+p = ggplot(solar_annualized,aes(x = year, y = ssn_total)) + geom_line(size = .9)
+p + geom_vline(xintercept = c(cycle_lists$startYear), linetype = 'dotted', size = .8, col = 'blue', show.legend = TRUE) +
+  geom_vline(xintercept = c(cycle_lists$maxYear), size = .4, col = 'red', show.legend = TRUE) +
+  labs(title = 'Total Annual Sunspots', x = 'Year', y = 'Total Sunspots') 
+
+flux_vals = flux_data %>% 
+  mutate(date = ymd(time) %>% 
+  mutate_at(vars(time), funs(year, month, day))
+
+
+min_flux_year = min(flux_vals$year)
+flux_cycle = cycle_lists %>% filter(startYear > min_flux_year)
+
+
+p = ggplot(flux_vals,aes(x = year, y = absolute_f30)) + geom_line(size = .9)
+p + geom_vline(xintercept = c(flux_cycle$startYear), linetype = 'dotted', size = .8, col = 'blue', show.legend = TRUE) +
+  geom_vline(xintercept = c(flux_cycle$maxYear), size = .4, col = 'red', show.legend = TRUE) +
+  labs(title = 'Average Flux Reading and Solar Cycles', x = 'Year', y = 'Avg. Flux') 
+
+```
+
+
+
+A look at the total number of sunspots per year since the year 1750. The vertical redlines indicate a year where the solar maximum has been recorded, and the grey line indicates a year where the solar cycle has begun. There have been 24 solar cycles that have been completed so far, and currently we are in solar cycle 25.
+
+## Solar Cycles
+
+[Wiki](https://en.wikipedia.org/wiki/List_of_solar_cycles)
+
+```{r}
+cycle_lists %>% head()
+
+```
+
+
+## Solar data
+
+[data](https://www.swpc.noaa.gov/products/solar-cycle-progression)
+
+As a starting point, all data was annualized to see wider trends over time.
+
+```{r}
+solar_cycle %>% select(Date, ssn, f10.7) %>% tail(10) %>% htmlTable()
+```
+
+Above we have monthly total number of sunspots. We will only use the SSN (Sun spot numbers) column due to large amounts of missing data in the others.
+
+## Price Data
+
+[Wheat](https://www.macrotrends.net/2534/wheat-prices-historical-chart-data)
+
+
+```{r}
+wheat_price %>% head()
+plot(wheat_price$Year, wheat_price$Close, pch = 19, 
+     xlab = 'Year', ylab = 'Wheat Price')
+lines(wheat_price$Year, wheat_price$Close)
+
+abline(v = cycle_lists$startYear, col = 'grey')
+abline(v = cycle_lists$maxYear, col = 'red')
+
+min_wheat_year = min(wheat_price$Year)
+wheat_cycle = cycle_lists %>% filter(startYear > min_wheat_year)
+
+p = ggplot(data = wheat_price, aes(x = Year, y = Close)) + geom_line(size = .9)
+p + geom_vline(xintercept = c(wheat_cycle$startYear), linetype = 'dotted', size = .8, col = 'blue', show.legend = TRUE) +
+  geom_vline(xintercept = c(wheat_cycle$maxYear), size = .4, col = 'red', show.legend = TRUE) +
+  labs(title = 'Wheat Price and Solar Cycles', x = 'Year', y = 'Wheat Price') 
+
+
+
+```
+
+[Corn](https://www.macrotrends.net/2532/corn-prices-historical-chart-data):
+
+```{r}
+corn_price %>% head()
+plot(corn_price$Year, corn_price$Close, pch = 19, 
+     xlab = 'Year', ylab = 'Corn Price')
+lines(corn_price$Year, corn_price$Close)
+
+abline(v = cycle_lists$startYear, col = 'grey')
+abline(v = cycle_lists$maxYear, col = 'red')
+
+
+
+min_corn_year = min(corn_price$Year)
+corn_cycle = cycle_lists %>% filter(startYear > min_corn_year)
+
+p = ggplot(data = corn_price, aes(x = Year, y = Close)) + geom_line(size = .9)
+p + geom_vline(xintercept = c(corn_cycle$startYear), linetype = 'dotted', size = .8, col = 'blue', show.legend = TRUE) +
+  geom_vline(xintercept = c(corn_cycle$maxYear), size = .4, col = 'red', show.legend = TRUE) +
+  labs(title = 'Corn Price and Solar Cycles', x = 'Year', y = 'Corn Price') 
+
+
+```
+
+> > Again the red lines indicate periods of a solar maximum, while the grey lines indicate the begining of a solar cycle.
+
+## Temperature and Climate data.
+
+[data](openweathermaps.org)
+
+```{r}
+annual_wheat = wheat_weather %>% 
+  mutate(time = ymd(time)) %>% 
+  mutate_at(vars(time), funs(year, month, day))%>% 
+  group_by(year) %>% 
+  summarise_if(is.numeric, mean,na.rm = TRUE) %>%
+  select(year, tavg, prcp, snow, wspd) %>%
+  data.frame()
+
+annual_corn = corn_weather %>% 
+  mutate(time = ymd(time)) %>% 
+  mutate_at(vars(time), funs(year, month, day))%>% 
+  group_by(year) %>% 
+  summarise_if(is.numeric, mean,na.rm = TRUE) %>%
+  select(year, tavg, prcp, snow, wspd) %>%
+  data.frame()
+
+annual_wheat %>% head()
+annual_corn %>% head()
+
+```
+
+We have obtained weather data using the 3 largest statewide producers of wheat in the US. Namely Kansas, North Dakota, and Montana; and similarly for corn using the states of Iowa, Illinois, Nebraska and Minnesota. Further, to simplify the data, average values of all states were taken to give an overall idea of the climate systems that acclimate wheat/corn production.
+
+> Description of variables in the weather dataframes.
+
+-   `tavg`: The average air temperature in °C
+
+-   `tmin`: The minimum air temperature in °C
+
+-   `tmax`: The maximum air temperature in °C
+
+-   `prcp`: The daily precipitation total in mm
+
+-   `snow`: The maximum snow depth in mm
+
+-   `wdir`: The average wind direction in degrees (°)
+
+-   `wspd`: The average wind speed in km/h
+
+-   `wpgt`: The peak wind gust in km/h
+
+-   `pres`: The average sea-level air pressure in hPa
+
+-   `tsun`: The daily sunshine total in minutes (m)
+
+*Data was gathered from [openweathermaps.org](openweathermaps.org) using the `metostat` package in python.*
+
+```{r}
+
+plot(annual_wheat$year, annual_wheat$tavg, 
+     xlab = 'Year', 
+     ylab = 'Avg. Temp', pch = 19, main = 'Wheat Regions')
+lines(annual_wheat$year, annual_wheat$tavg)
+abline(v = cycle_lists$startYear, col = 'grey')
+abline(v = cycle_lists$maxYear, col = 'red')
+
+
+
+
+min_temp_wheat = min(annual_wheat$year)
+wheat_temp_cycle = cycle_lists %>% filter(startYear > min_temp_wheat)
+
+p = ggplot(data = annual_wheat, aes(x = year, y = tavg)) + geom_line(size = .9)
+p + geom_vline(xintercept = c(wheat_temp_cycle$startYear), linetype = 'dotted', size = .8, col = 'blue', show.legend = TRUE) +
+  geom_vline(xintercept = c(wheat_temp_cycle$maxYear), size = .4, col = 'red', show.legend = TRUE) +
+  labs(title = 'Temperature and Solar Cycles in Wheat Regions', x = 'Year', y = 'Average Temperature') 
+
+
+
+```
+
+```{r}
+
+plot(annual_corn$year, annual_corn$tavg, 
+     xlab = 'Year', 
+     ylab = 'Avg. Temp', pch = 19, main = 'Corn Regions')
+lines(annual_corn$year, annual_corn$tavg)
+abline(v = cycle_lists$startYear, col = 'grey')
+abline(v = cycle_lists$maxYear, col = 'red')
+
+
+min_temp_corn = min(annual_corn$year)
+corn_temp_cycle = cycle_lists %>% filter(startYear > min_temp_corn)
+
+p = ggplot(data = annual_corn, aes(x = year, y = tavg)) + geom_line(size = .9)
+p + geom_vline(xintercept = c(corn_temp_cycle$startYear), linetype = 'dotted', size = .8, col = 'blue', show.legend = TRUE) +
+  geom_vline(xintercept = c(corn_temp_cycle$maxYear), size = .4, col = 'red', show.legend = TRUE) +
+  labs(title = 'Temperature and Solar Cycles in Corn Regions', x = 'Year', y = 'Average Temperature') 
+
+
+```
+
+# Approach:
+
+As a starting point, it was decided to use linear regression to find associations within the data. First, we merge the data-sets into a data frame to pass to the linear model.
+
+```{r}
+########## Wheat Model data frame
+wheat_price$year = wheat_price$Year
+wheat_df = merge(wheat_price, solar_annualized, by = 'year') %>%
+            subset(select = -c(Year, AvgClose, Open, High,  Low, PercentChange))
+
+names(wheat_df)[names(wheat_df) == 'Close'] = 'Wheat_price'
+wheat_df = merge(wheat_df, annual_wheat, by = 'year')
+head(wheat_df)
+corrplot(cor(wheat_df[,-1]), method ='number')
+
+
+```
+
+```{r}
+
+########### Corn Model data frame
+corn_price$year = corn_price$Year
+corn_df = merge(corn_price, solar_annualized, by = 'year') %>%
+  subset(select = -c(Year, AvgClose, Open, High,  Low, PercentChange))
+names(corn_df)[names(corn_df) == 'Close'] = 'Corn_price'
+
+corn_df = merge(corn_df, annual_corn, by = 'year')
+head(corn_df)
+corrplot(cor(corn_df[,-1]), method = 'number')
+
+```
+
+Above we can see the correlation plots for Corn and Wheat. It is observed that there are no signs of multicollinearity, or severe correlations between both of the model data frames.
+
+## Linear Model
+
+```{r}
+wheat_model = lm('Wheat_price ~.', data = wheat_df[,-1])
+summary(wheat_model)
+```
+
+```{r}
+corn_model = lm('Corn_price ~.', data = corn_df[,-1])
+summary(corn_model)
+```
+
+Sunspot numbers seem to have a negative effect on the price of corn and wheat, as there is a negative coefficient. On the other hand the $R^2$ Value for both models are pretty low, as the models only account for 30% of the explained variability.
+
+## Residual Analysis
+
+```{r}
+
+# Code for plots
+par(mfcol = c(2,2))
+
+# Assumption 1: Linearity / Zero Mean: E[e_i] = 0
+#   Check with: Plot the residuals (y-axis) and Predictor(x-axis)
+plot(wheat_df$Wheat_price, resid(wheat_model), main = 'Residuals vs. Predictor')
+abline(0, 0, col = 'red')
+# Assumption 2: Constant Variance: Var[e_i] = sigma^2
+#   Check with: Plot residuals(y-axis) and fitted values(x-axis)
+plot(fitted.values(wheat_model), resid(wheat_model), main = 'Residuals vs. Fitted Values')
+abline(0, 0, col = 'red')
+
+# Assumption 3: Independence: e_i are all IID
+#   Check with: Constant variance plot, look for clustered data points.  
+
+# Assumption 4: Normality: all e_i follow Normal(0, sigma^2)
+#   Check with:QQPlot and histogram of the residuals. 
+
+qqPlot(wheat_model)
+hist(resid(wheat_model))
+
+
+```
+
+```{r}
+# Code for plots
+par(mfcol = c(2,2))
+
+# Assumption 1: Linearity / Zero Mean: E[e_i] = 0
+#   Check with: Plot the residuals (y-axis) and Predictor(x-axis)
+plot(corn_df$Corn_price, resid(corn_model), main = 'Residuals vs. Predictor')
+abline(0, 0, col = 'red')
+# Assumption 2: Constant Variance: Var[e_i] = sigma^2
+#   Check with: Plot residuals(y-axis) and fitted values(x-axis)
+plot(fitted.values(corn_model), resid(corn_model), main = 'Residuals vs. Fitted Values')
+abline(0, 0, col = 'red')
+
+# Assumption 3: Independence: e_i are all IID
+#   Check with: Constant variance plot, look for clustered data points.  
+
+# Assumption 4: Normality: all e_i follow Normal(0, sigma^2)
+#   Check with:QQPlot and histogram of the residuals. 
+
+qqPlot(corn_model)
+hist(resid(corn_model))
+
+
+```
+
+Both plots seem to violate the linearity assumption seen in the residuals vs. predcitor plot. The histogram of residuals also seem to have a skew to the distribution. Therefore, we can explore if transformations to the response variable will improve the model.
+
+```{r}
+box_transformation = function(model){require(car)
+  par(mfcol = c(1,1))
+  bc3 = boxCox(model)
+  lam = bc3$x[which(bc3$y == max(bc3$y))]
+  rounded_lam = ceiling(lam *2)/2
+  cat('Optimal Lambda:',lam, '\n', 'Rounded lambda: ', rounded_lam, '\n')
+  if (rounded_lam == 1){cat('No Transformation Suggested')}
+  if (rounded_lam == .5){cat('Square root transformation Suggested')}
+  if (rounded_lam == -.5){cat('1 / Square root transformation Suggested')}
+  if (rounded_lam == 0){
+    cat('Log Transformation log(y) Suggested', '\n', 'Use log(y+1) if there are zeros in the response')}
+  if (rounded_lam == -1){cat('Inverse (1/y) Transform suggested')}
+  }
+```
+
+
+```{r}
+box_transformation(wheat_model)
+
+```
+
+```{r}
+box_transformation(corn_model)
+
+```
+
+The box-cox transformation suggest a 1/sqrt(y) transformation of the response variables, for both models.
+
+```{r}
+## Transformed linear Model 
+wheat_model = lm(1/sqrt(wheat_df$Wheat_price) ~., data = wheat_df[,-1])
+corn_model = lm(1/sqrt(corn_df$Corn_price)~., data = corn_df[,-1])
+
+summary(wheat_model)
+summary(corn_model)
+
+```
+
+Improvements to be made: 
+
+We can create some indicator variables to specify  weather or not a data point is within a period of a solar maximum, and similarly of the begining or ending of a cycle.  
+
+# Planned Approach 
+
+From here,our approach will attempt to study the impact of solar patterns and climate on price movements across different time intervals: daily, weekly, monthly, and look at that statistical significance of solar patterns to see if they're relevant on their own, and in light of other factors such as auto regressive or seasonal indicators.
+
+
+We also plan on taking an ML centric approach to see if it provides any additional insight. What we'll plan to do is perform a time series decomposition on the price of each commodity and use tree based ML techniques to try and estimate the impact of solar patterns on price by fitting our models on the residual part. This is likely to provide better results because tree based models are not able to extrapolate values that are not in their training data, so this step will remove the problem of projecting trends based on time.
+
+# Status of data cleaning/wrangling 
+
+Most of our available data has been cleaned and is showcased here. However there are a few more sources that are not listed here, such as daily sunspot and radio flux emissions from the sun (Monthly data was used above). In addition to that, daily spot prices for wheat and corn where gathered to support our future plans to explore the impact with more depth. 
+
+
+# Future Planning
+
+Progress Video Presentation & Progress Report -2022-07-06
+
+Complete project approach and methodology, compare results - 2022-07-18
+
+Final Video Presentation - 2022-07-20
+
+Final Reports, Slides, Data & Code - 2022-07-24
+
+
+
+
+# Sources 
+
+https://www.openweathermaps.org
+
+https://www.weather.gov/fsd/sunspots#
+
+https://www.swpc.noaa.gov/products/solar-cycle-progression
+
+https://en.wikipedia.org/wiki/List_of_solar_cycles
+
+https://www.macrotrends.net/2532/corn-prices-historical-chart-data
+
+https://www.macrotrends.net/2532/wheat-prices-historical-chart-data
+
+https://www.nasa.gov/mission_pages/sunearth/solar-events-news/Does-the-Solar-Cycle-Affect-Earths-Climate.html
+
+
